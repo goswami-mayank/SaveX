@@ -1,6 +1,6 @@
 # SaveX
 
-SaveX is a mobile-first Progressive Web App (PWA) for tracking food expiry dates, locating household items, receiving reminders, and discovering meals based on what is already in your pantry.
+SaveX is a Progressive Web App (PWA) for tracking food expiry dates, locating household items, receiving reminders, and discovering meals based on what is already in your pantry.
 
 The application uses **FastAPI** for authentication, validation, persistence, provider integrations, and notifications, with **Next.js** powering the user interface.
 
@@ -11,8 +11,7 @@ The interface and backend are implemented. The configured Supabase project has t
 The following still require human verification:
 
 - Browser voice functionality
-- Mobile installation as a PWA
-- WhatsApp delivery
+- SMS Notification
 - Complete end-to-end user flows
 
 For more details, see the [project documentation](docs/PROJECT.md), [todo and status](docs/TODO.md), and [changelog](CHANGELOG.md).
