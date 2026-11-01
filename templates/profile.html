@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Phone number - SaveX{% endblock %}
+{% block nav %}
+<form method="post" action="/logout"><button type="submit">Log out</button></form>
+{% endblock %}
+{% block content %}
+<div class="card narrow">
+    <h2>Your phone number</h2>
+    {% if needs_phone %}<div class="msg info">Add a phone number to receive SMS expiry alerts.</div>{% endif %}
+    {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+    <form method="post" action="/profile">
+        <label for="phone">Phone (international format)</label>
+        <input id="phone" name="phone" type="tel" value="{{ phone }}" placeholder="+919876543210">
+        <button class="btn" type="submit">Save</button>
+    </form>
+    <p><a href="/">Back</a></p>
+</div>
+{% endblock %}
