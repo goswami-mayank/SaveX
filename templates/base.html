@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SaveX{% endblock %}</title>
+    <style>
+        :root { --green: #293740; --bg: #f5f6f6; --line: #dfe4e6; }
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, Arial, sans-serif; background: var(--bg); margin: 0; color: #222; }
+        header { background: var(--green); color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+        header form { margin: 0; }
+        header a, header button { color: #fff; background: none; border: 0; cursor: pointer; font-size: 14px; text-decoration: underline; }
+        main { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+        .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+        label { display: block; font-size: 13px; margin: 10px 0 4px; color: #555; }
+        input, select { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; }
+        button.btn { background: var(--green); color: #fff; border: 0; border-radius: 6px; padding: 10px 18px; font-size: 15px; cursor: pointer; margin-top: 14px; }
+        button.btn.secondary { background: #444; }
+        button.btn:disabled { background: #aaa; cursor: default; }
+        .msg { padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; }
+        .error { background: #fde8e8; color: #9b1c1c; }
+        .info { background: #e8eded; color: var(--green); }
+        .narrow { max-width: 400px; margin: 40px auto; }
+        {% block style %}{% endblock %}
+    </style>
+</head>
+<body>
+    <header>
+        <strong>SaveX</strong>
+        {% block nav %}{% endblock %}
+    </header>
+    <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

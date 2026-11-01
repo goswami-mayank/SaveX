@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Log in - SaveX{% endblock %}
+{% block content %}
+<div class="card narrow">
+    <h2>Log in</h2>
+    {% if error %}<div class="msg error" role="alert">{{ error }}</div>{% endif %}
+    {% if info %}<div class="msg info" id="auth-info" role="status">{{ info }}</div>{% endif %}
+    <div class="msg error" id="confirmation-error" role="alert" hidden></div>
+    <form method="post" action="/login">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password">
+        <button class="btn" type="submit">Log in</button>
+    </form>
+    <p>No account? <a href="/signup">Sign up</a></p>
+    <details id="confirmation-help">
+        <summary>Need a new confirmation link?</summary>
+        <form method="post" action="/resend-confirmation">
+            <label for="confirmation-email">Account email</label>
+            <input id="confirmation-email" name="email" type="email" required autocomplete="email">
+            <button class="btn secondary" type="submit">Send confirmation link</button>
+        </form>
+    </details>
+</div>
+<script>
+(() => {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    if (fragment.has('error') || fragment.has('error_code')) {
+        const info = document.getElementById('auth-info');
+        if (info) info.hidden = true;
+        const error = document.getElementById('confirmation-error');
+        error.textContent = fragment.get('error_code') === 'otp_expired'
+            ? 'This confirmation link is invalid or has expired. Request a new link below.'
+            : 'The confirmation link could not be verified. Request a new link below.';
+        error.hidden = false;
+        document.getElementById('confirmation-help').open = true;
+    }
+    // Authentication fragments can contain tokens. Do not leave them in browser history.
+    if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search);
+})();
+</script>
+{% endblock %}

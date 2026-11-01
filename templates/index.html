@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block style %}
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .tab { background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 14px; }
+        .tab.active { background: var(--green); color: #fff; border-color: var(--green); }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .chip { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .chip.slight { background: #fff4c2; color: #7a5b00; }
+        .chip.moderate { background: #ffe0c2; color: #8a4200; }
+        .chip.high { background: #fdd; color: #a00; }
+        .chip.expired { background: #ddd; color: #555; }
+        .chip.ok { background: #e3f4ee; color: var(--green); }
+        .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+        .row:last-child { border-bottom: 0; }
+        .muted { color: #777; font-size: 13px; }
+        .grid { display: grid; grid-template-columns: 2fr 1.3fr 1fr 1.2fr auto; gap: 8px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--line); }
+        .banner { background: #fdd; color: #a00; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-weight: 600; }
+        .badge { background: #c00; color: #fff; border-radius: 10px; padding: 0 7px; font-size: 12px; margin-left: 4px; }
+        .mic { width: 90px; height: 90px; border-radius: 50%; font-size: 34px; background: #c0392b; color: #fff; border: 0; cursor: pointer; }
+        .mic.rec { animation: pulse 1s infinite; }
+        @keyframes pulse { 50% { box-shadow: 0 0 0 14px rgba(192, 57, 43, .25); } }
+        .meal h4 { margin: 0 0 4px; text-transform: capitalize; }
+        .hit { background: #fff4c2; border-radius: 4px; padding: 0 4px; font-weight: 600; }
+{% endblock %}
+{% block nav %}
+<div>
+    <span>{{ name }}</span> &middot;
+    <a href="/profile">{{ phone }}</a> &middot;
+    <form method="post" action="/logout" style="display:inline"><button type="submit">Log out</button></form>
+</div>
+{% endblock %}
+{% block content %}
+<div id="banner" class="banner" hidden></div>
+
+<div class="tabs">
+    <button class="tab active" data-tab="add">Add by voice</button>
+    <button class="tab" data-tab="pantry">Pantry</button>
+    <button class="tab" data-tab="alerts">Alerts<span id="unread" class="badge" hidden></span></button>
+    <button class="tab" data-tab="plan">Dish plan</button>
+</div>
+
+<section id="add" class="panel active card">
+    <p>Say what you bought, when, how long it lasts and where you keep it.<br>
+       <span class="muted">e.g. "Bought one litre milk today, lasts five days, keep in fridge."</span></p>
+    <div style="text-align:center">
+        <button id="mic" class="mic" aria-label="Record">&#127908;</button>
+        <div id="status" class="muted" style="margin-top:10px">Tap to record, tap again to stop.</div>
+    </div>
+    <div id="confirm" hidden>
+        <h3>Confirm items</h3>
+        <div class="muted" id="transcript"></div>
+        <div id="confirmRows"></div>
+        <button id="saveBtn" class="btn">Save to pantry</button>
+    </div>
+</section>
+
+<section id="pantry" class="panel card"></section>
+<section id="alerts" class="panel card"></section>
+
+<section id="plan" class="panel">
+    <div class="card">
+        <button id="planBtn" class="btn" style="margin-top:0">Suggest today's meals</button>
+        <div id="planStatus" class="muted"></div>
+    </div>
+    <div id="planOut"></div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(path, opts = {}) {
+    const res = await fetch(path, opts);
+    if (res.status === 401) { location.href = '/login'; throw new Error('Signed out'); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    return data;
+}
+const post = (path, body) => api(path, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body ?? {})
+});
+
+// ---- tabs ----
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab, .panel').forEach(e => e.classList.remove('active'));
+    t.classList.add('active');
+    $(t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'pantry') loadPantry();
+    if (t.dataset.tab === 'alerts') loadAlerts(true);
+}));
+
+// ---- voice ----
+let recorder, chunks = [];
+$('mic').addEventListener('click', async () => {
+    if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            $('mic').classList.remove('rec');
+            $('status').textContent = 'Transcribing and parsing...';
+            const fd = new FormData();
+            fd.append('file', new Blob(chunks, { type: recorder.mimeType }), 'recording.webm');
+            try {
+                const data = await api('/api/voice', { method: 'POST', body: fd });
+                showConfirm(data);
+            } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+        };
+        recorder.start();
+        $('mic').classList.add('rec');
+        $('status').textContent = 'Recording... tap again to stop.';
+    } catch (e) { $('status').textContent = 'Microphone unavailable: ' + e.message; }
+});
+
+const LOCS = ['fridge', 'freezer', 'pantry', 'other'];
+function showConfirm({ transcript, items }) {
+    $('transcript').textContent = transcript ? `Heard: "${transcript}"` : '';
+    if (!items.length) { $('status').textContent = 'No items found. Try again.'; $('confirm').hidden = true; return; }
+    $('status').textContent = 'Check the details, fix anything misheard, then save.';
+    $('confirmRows').innerHTML = items.map(i => `
+        <div class="grid">
+            <div><label>Item</label><input data-f="name" value="${esc(i.name)}"></div>
+            <div><label>Bought</label><input data-f="bought_date" type="date" value="${esc(i.bought_date)}"></div>
+            <div><label>Lasts (days)</label><input data-f="shelf_days" type="number" min="0" value="${esc(i.shelf_days)}"></div>
+            <div><label>Where</label><select data-f="location">${LOCS.map(l => `<option ${l === i.location ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+            <button class="btn secondary" style="margin:0" onclick="this.parentElement.remove()">&times;</button>
+        </div>`).join('');
+    $('confirm').hidden = false;
+}
+
+$('saveBtn').addEventListener('click', async () => {
+    const items = [...$('confirmRows').children].map(r => {
+        const v = {}; r.querySelectorAll('[data-f]').forEach(el => v[el.dataset.f] = el.value);
+        v.shelf_days = parseInt(v.shelf_days || '0', 10);
+        return v;
+    }).filter(i => i.name.trim());
+    if (!items.length) return;
+    try {
+        await post('/api/items', { items });
+        $('confirm').hidden = true;
+        $('status').textContent = `Saved ${items.length} item(s).`;
+        checkAlerts();
+    } catch (e) { $('status').textContent = 'Error: ' + e.message; }
+});
+
+// ---- pantry ----
+async function loadPantry() {
+    const items = await api('/api/items');
+    const active = items.filter(i => i.status === 'active'), expired = items.filter(i => i.status === 'expired');
+    const row = i => `<div class="row">
+        <div><strong>${esc(i.name)}</strong><div class="muted">${esc(i.location)} &middot; expires ${esc(i.expiry_date)}</div></div>
+        <div>${i.status === 'active'
+            ? `<span class="chip ${i.level || 'ok'}">${i.days_left} day(s) left</span>
+               <button class="btn secondary" style="margin:0 0 0 8px;padding:4px 10px" onclick="markUsed(${i.id})">Used</button>`
+            : '<span class="chip expired">expired</span>'}</div></div>`;
+    $('pantry').innerHTML = (active.map(row).join('') || '<p class="muted">Nothing in the pantry yet.</p>')
+        + (expired.length ? `<h4>Expired</h4>${expired.map(row).join('')}` : '');
+    const urgent = active.filter(i => i.level === 'high');
+    $('banner').hidden = !urgent.length;
+    $('banner').textContent = urgent.length ? 'Use soon: ' + urgent.map(i => i.name).join(', ') : '';
+}
+async function markUsed(id) {
+    await api('/api/items/' + id, { method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ status: 'used' }) });
+    loadPantry();
+}
+
+// ---- alerts ----
+async function loadAlerts(markRead = false) {
+    const alerts = await api('/api/alerts');
+    const unread = alerts.filter(a => !a.is_read).length;
+    $('alerts').innerHTML = alerts.map(a => `<div class="row">
+        <div><span class="chip ${a.level}">${a.level}</span> ${esc(a.message)}
+        <div class="muted">${new Date(a.sent_at).toLocaleString()}</div></div>${a.is_read ? '' : '<strong>new</strong>'}</div>`).join('')
+        || '<p class="muted">No alerts yet.</p>';
+    if (markRead && unread) await post('/api/alerts/read');
+    $('unread').hidden = markRead || !unread;
+    $('unread').textContent = unread;
+}
+async function checkAlerts() {
+    try { await post('/api/alerts/check'); await loadAlerts(); await loadPantry(); } catch (e) { console.error(e); }
+}
+
+// ---- plan ----
+$('planBtn').addEventListener('click', async () => {
+    $('planStatus').textContent = 'Planning...'; $('planOut').innerHTML = '';
+    try {
+        const { priority, meals } = await post('/api/plan');
+        const pr = new Set(priority.map(p => p.toLowerCase()));
+        $('planStatus').textContent = 'Expiring soon: ' + priority.join(', ');
+        $('planOut').innerHTML = Object.entries(meals).filter(([, m]) => m).map(([k, m]) => `
+            <div class="card meal"><h4>${esc(k)}: ${esc(m.dish)}</h4>
+            <div>${(m.items_used || []).map(i => pr.has(String(i).toLowerCase()) ? `<span class="hit">${esc(i)}</span>` : esc(i)).join(', ')}</div>
+            <ol>${(m.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>`).join('');
+    } catch (e) { $('planStatus').textContent = 'Error: ' + e.message; }
+});
+
+checkAlerts();
+</script>
+{% endblock %}
