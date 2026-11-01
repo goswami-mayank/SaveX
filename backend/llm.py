@@ -1,4 +1,4 @@
-"""Only this adapter knows OpenAI request details. No automatic provider fallback."""
+"""Provider adapters for validated structured output. No automatic fallback."""
 
 import json
 import os
@@ -33,12 +33,72 @@ class OpenAIProvider:
         return response.output_parsed
 
 
+def cerebras_schema(model: type[BaseModel]) -> dict:
+    """Restrict Pydantic schemas to Cerebras's documented strict subset.
+
+    Constraints omitted here are still enforced by Pydantic on the response.
+    """
+    supported = {
+        "$ref", "type", "title", "description", "enum", "const", "required",
+        "additionalProperties", "minimum", "maximum", "exclusiveMinimum",
+        "exclusiveMaximum", "multipleOf", "anyOf", "items",
+    }
+
+    def convert(node):
+        if isinstance(node, list):
+            return [convert(value) for value in node]
+        if not isinstance(node, dict):
+            return node
+        result = {}
+        for key, value in node.items():
+            if key in ("properties", "$defs"):
+                result[key] = {name: convert(child) for name, child in value.items()}
+            elif key in supported:
+                result[key] = convert(value)
+        if node.get("type") == "object":
+            result["additionalProperties"] = False
+        return result
+
+    return convert(model.model_json_schema())
+
+
+class CerebrasProvider:
+    def generate(self, system: str, payload: dict, schema: type[T]) -> T:
+        api_key = os.getenv("CEREBRAS_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("CEREBRAS_API_KEY is not configured")
+        model = os.getenv("CEREBRAS_MODEL", "qwen-3.8-27b").strip()
+        if not model:
+            raise RuntimeError("CEREBRAS_MODEL is not configured")
+        with OpenAI(
+            api_key=api_key, base_url="https://api.cerebras.ai/v1",
+            timeout=40, max_retries=0,
+        ) as client:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": json.dumps(payload)},
+                ],
+                response_format={"type": "json_schema", "json_schema": {
+                    "name": schema.__name__, "strict": True, "schema": cerebras_schema(schema),
+                }},
+            )
+        if not response.choices or response.choices[0].finish_reason != "stop":
+            raise ValueError("Cerebras returned an incomplete structured response")
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Cerebras returned an empty structured response")
+        return schema.model_validate_json(content)
+
+
 def get_provider() -> StructuredProvider:
-    if os.getenv("LLM_PROVIDER", "openai") != "openai":
-        raise ValueError(
-            "Only OpenAI is enabled. Cerebras requires a validated adapter and benchmark approval."
-        )
-    return OpenAIProvider()
+    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    if provider == "openai":
+        return OpenAIProvider()
+    if provider == "cerebras":
+        return CerebrasProvider()
+    raise ValueError("LLM_PROVIDER must be 'openai' or 'cerebras'")
 
 
 def parse_items(

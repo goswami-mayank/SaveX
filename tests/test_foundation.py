@@ -268,9 +268,51 @@ def test_exa_sources_and_errors(monkeypatch):
         search_recipe_image("omelette", mock)
 
 
-def test_llm_failure_propagates():
+def test_llm_failure_propagates(monkeypatch):
+    import json
+    import backend.llm as llm
+    from openai import OpenAI
+
     with pytest.raises(RuntimeError):
         parse_items("milk", TODAY, FakeProvider(RuntimeError("offline")))
+
+    monkeypatch.setenv("LLM_PROVIDER", "cerebras")
+    monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
+    monkeypatch.setenv("CEREBRAS_MODEL", "qwen-3.8-27b")
+    content = {"items": [
+        {"name": "milk", "bought_date": None, "shelf_days": None,
+         "location": None, "quantity_text": None, "clarification": "Purchase date needed.",
+         "expiry_date_hint": "2026-11-03"},
+        {"name": "eggs", "bought_date": None, "shelf_days": None,
+         "location": "fridge", "quantity_text": None, "clarification": None,
+         "expiry_date_hint": None},
+    ]}
+    def handler(request):
+        assert str(request.url) == "https://api.cerebras.ai/v1/chat/completions"
+        body = json.loads(request.content)
+        assert body["model"] == "qwen-3.8-27b"
+        structured = body["response_format"]["json_schema"]
+        assert structured["strict"] is True
+        definition = "DraftItem" if structured["name"] == "Extraction" else "Meal"
+        assert structured["schema"]["$defs"][definition]["additionalProperties"] is False
+        assert "format" not in json.dumps(structured["schema"])
+        answer = content if structured["name"] == "Extraction" else meal_plan().model_dump()
+        return httpx.Response(200, json={"id": "test", "object": "chat.completion", "created": 0,
+            "model": body["model"], "choices": [{"index": 0, "finish_reason": "stop",
+            "message": {"role": "assistant", "content": json.dumps(answer)}}]})
+
+    monkeypatch.setattr(llm, "OpenAI", lambda **kwargs: OpenAI(
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)), **kwargs
+    ))
+    items = parse_items("doodh aur eggs", TODAY)
+    assert [item["name"] for item in items] == ["milk", "eggs"]
+    assert set(make_plan(PANTRY, TODAY)["meals"]) == {"breakfast", "lunch", "dinner"}
+    content["items"][0]["expiry_date_hint"] = "invalid-date"
+    with pytest.raises(ValidationError):
+        parse_items("milk", TODAY)
+    monkeypatch.setenv("CEREBRAS_API_KEY", "")
+    with pytest.raises(RuntimeError, match="CEREBRAS_API_KEY"):
+        parse_items("milk", TODAY)
 
 
 def test_auth_and_database_failure():

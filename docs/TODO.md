@@ -22,7 +22,8 @@
 - [ ] Validate the compatibility foreign key after backfilling existing users, and audit legacy tables/constraints before deploying an existing production database.
 - [ ] Improve concurrent item updates, end-to-end structured response contracts, database failure observability, and session lifecycle under unstable connections.
 - [ ] Independently evaluate generated meal instructions: validation checks the declared ingredient list and priority coverage, but cannot prove free-text steps omit every unlisted ingredient.
-- [ ] Benchmark Cerebras only with a user-approved dataset and thresholds; no adapter or switch is implemented.
+- [x] Verify the Cerebras API key using synthetic extraction and three-meal planning; switch the configured workspace to Cerebras.
+- [ ] Compare Cerebras extraction quality, meal compliance, latency, and cost against OpenAI on a representative dataset.
 
 ## Completed checks
 

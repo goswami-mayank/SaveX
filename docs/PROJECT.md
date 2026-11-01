@@ -12,7 +12,7 @@ Household records are separate because many household objects have no purchase o
 - FastAPI: authenticated, RLS-scoped requests, schema validation, expiry arithmetic, AI coordination, scheduler, and Twilio delivery.
 - Supabase: `users`, `items`, `household_items`, and `alerts_log`; migration in `schema.sql`. Retains Supabase Auth and row-level security.
 - `gpt-live-transcribe`: browser PCM16 audio streams through a FastAPI WebSocket to an OpenAI Realtime transcription session. The user stops recording to commit a turn; the session returns incremental and final transcripts.
-- `gpt-5.4-mini-2026-03-17`: structured food/household extraction and meal planning. Pydantic validates provider output; invalid meal plans retry once. No save happens before user confirmation.
+- `gpt-5.4-mini-2026-03-17` or Cerebras `qwen-3.8-27b`: configurable structured food/household extraction and meal planning. Cerebras uses its OpenAI-compatible chat endpoint with strict JSON Schema; backend Pydantic and pantry rules still validate the result, and invalid meal plans retry once. No save happens before user confirmation. This workspace uses Cerebras after a live synthetic extraction and planning check; OpenAI is the default for fresh environments.
 - `gpt-live-1`: browser WebRTC audio; client delegation routes household location queries, grocery/household proposals, pantry questions, meal plans and requested recipe research to FastAPI. Session responses never mutate the database. User must confirm proposals on screen.
 - Exa: optional bounded search of pantry ingredients via `POST https://api.exa.ai/search` using `EXA_API_KEY`; linked recipe sources and highlights inform planning. After a validated plan is generated, up to three concurrent searches find related photos, with the source linked inside each meal card. Photo search or loading failures leave the plan usable; research failures are surfaced. Snippets are untrusted data and cannot override ingredient/priority rules.
 - APScheduler runs a cron-style worker each minute. Supabase persists notification jobs, claims them atomically, and records each delivery slot in `alerts_log`. SMS and in-app alerts follow the requested Asia/Kolkata cadence; the expiry-day call is simulated. Real SMS and WhatsApp are disabled by default in a new environment. SMS is enabled in the current workspace after explicit authorization; WhatsApp remains disabled.
@@ -57,5 +57,6 @@ OpenAI models, network access, Supabase, and the web browser can fail independen
 - [OpenAI live transcription](https://developers.openai.com/api/docs/guides/realtime-transcription)
 - [OpenAI GPT-Live and client delegation](https://developers.openai.com/api/docs/guides/live-delegation)
 - [Exa Search API](https://exa.ai/docs/reference/search)
+- [Cerebras structured outputs](https://inference-docs.cerebras.ai/capabilities/structured-outputs)
 - [shadcn/ui Next.js installation](https://ui.shadcn.com/docs/installation/next)
 - `docs/KT_HANDOFF.md`: baseline architecture assessment and earlier handoff, retained as a historical snapshot.

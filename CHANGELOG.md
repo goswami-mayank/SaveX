@@ -1,5 +1,10 @@
 # Changelog
 
+## Cerebras provider integration
+
+- Added a configurable Cerebras `qwen-3.8-27b` structured-output adapter for food and household extraction and meal planning, with independent backend validation and no automatic fallback. Realtime voice remains on OpenAI.
+- Added a no-write live verification script and mocked HTTP coverage. Verified real Cerebras grocery extraction and three-meal planning before switching the workspace provider.
+
 ## Exa recipe photos
 
 - Added source-linked related photos inside each meal card when Exa research is selected. Image searches run concurrently and missing or blocked photos do not prevent meal planning.
